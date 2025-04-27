@@ -1,9 +1,12 @@
 import SwiftUI
+import UIKit
+import MapKit
 
 struct ContentView: View {
     @EnvironmentObject private var locationManager: LocationManager
     @EnvironmentObject private var rideManager: RideManager
     @State private var selectedTab = 0
+    @State private var showLocationPermissionAlert = false
     
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -13,9 +16,32 @@ struct ContentView: View {
                     ActiveRideView()
                 } else {
                     VStack {
-                        MapView(region: $locationManager.currentRegion, showsUserLocation: true)
+                        ExtendedMapView(region: $locationManager.currentRegion)
                             .ignoresSafeArea(edges: .top)
                             .frame(height: 300)
+                            .overlay(alignment: .top) {
+                                if !locationManager.isLocationAuthorized {
+                                    Button(action: {
+                                        showLocationPermissionAlert = true
+                                    }) {
+                                        Text("GPS Access Required")
+                                            .font(.caption)
+                                            .padding(8)
+                                            .background(Color.red)
+                                            .foregroundColor(.white)
+                                            .cornerRadius(8)
+                                    }
+                                    .padding(.top, 50)
+                                }
+                            }
+                        
+                        if let errorMessage = locationManager.locationErrorMessage {
+                            Text(errorMessage)
+                                .foregroundColor(.red)
+                                .font(.caption)
+                                .padding(.horizontal)
+                                .padding(.top, 8)
+                        }
                         
                         VStack(spacing: 20) {
                             Text("Ready to ride?")
@@ -26,8 +52,12 @@ struct ContentView: View {
                                 .foregroundColor(.secondary)
                             
                             Button(action: {
-                                locationManager.startTracking()
-                                rideManager.startRide()
+                                if locationManager.isLocationAuthorized {
+                                    locationManager.startTracking()
+                                    rideManager.startRide()
+                                } else {
+                                    showLocationPermissionAlert = true
+                                }
                             }) {
                                 HStack {
                                     Image(systemName: "record.circle")
@@ -47,6 +77,19 @@ struct ContentView: View {
                         Spacer()
                     }
                     .navigationTitle("MotoTracker")
+                    .alert("Location Permission Required", isPresented: $showLocationPermissionAlert) {
+                        Button("Settings", role: .none) {
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                UIApplication.shared.open(url)
+                            }
+                        }
+                        Button("Request Permission", role: .none) {
+                            locationManager.requestLocationPermissions()
+                        }
+                        Button("Cancel", role: .cancel) { }
+                    } message: {
+                        Text("MotoTracker needs GPS access to track your rides. Please grant location permissions in Settings.")
+                    }
                 }
             }
             .tabItem {

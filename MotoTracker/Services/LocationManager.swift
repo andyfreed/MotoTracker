@@ -11,40 +11,57 @@ class LocationManager: NSObject, ObservableObject {
     @Published var lastLocation: CLLocation?
     @Published var currentAddress: String = "Unknown Location"
     @Published var currentRegion = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 37.3323, longitude: -122.0312),
+        center: CLLocationCoordinate2D(latitude: 42.3601, longitude: -71.0589),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
     )
     
     @Published var isTrackingLocation = false
+    @Published var isLocationAuthorized = false
+    @Published var locationErrorMessage: String?
     
     // For tracking a collection of locations during a ride
     @Published var currentLocationPoints: [LocationPoint] = []
     
     override init() {
         super.init()
+        
+        // Configure location manager with the best accuracy
         self.locationManager.delegate = self
-        self.locationManager.desiredAccuracy = kCLLocationAccuracyBest
-        self.locationManager.distanceFilter = 10 // Update location every 10 meters
+        self.locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        self.locationManager.distanceFilter = 5 // Update every 5 meters
         self.locationManager.pausesLocationUpdatesAutomatically = false
         self.locationManager.allowsBackgroundLocationUpdates = true
         self.locationManager.showsBackgroundLocationIndicator = true
+        self.locationManager.activityType = .automotiveNavigation
         
+        // Start immediately
         self.checkLocationAuthorization()
     }
     
     func checkLocationAuthorization() {
-        switch locationManager.authorizationStatus {
+        let status = locationManager.authorizationStatus
+        locationStatus = status
+        
+        switch status {
         case .authorizedWhenInUse, .authorizedAlways:
             locationManager.startUpdatingLocation()
-            locationStatus = locationManager.authorizationStatus
+            isLocationAuthorized = true
+            locationErrorMessage = nil
         case .notDetermined:
             locationManager.requestAlwaysAuthorization()
-            locationStatus = .notDetermined
+            isLocationAuthorized = false
+            locationErrorMessage = "Location permissions not determined"
         case .denied, .restricted:
-            locationStatus = locationManager.authorizationStatus
+            isLocationAuthorized = false
+            locationErrorMessage = "Location access denied"
         @unknown default:
-            break
+            isLocationAuthorized = false
+            locationErrorMessage = "Unknown location authorization status"
         }
+    }
+    
+    func requestLocationPermissions() {
+        locationManager.requestAlwaysAuthorization()
     }
     
     func startTracking() {
@@ -52,8 +69,12 @@ class LocationManager: NSObject, ObservableObject {
         currentLocationPoints.removeAll()
         
         // Set up location manager for tracking
-        locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        locationManager.distanceFilter = 5 // Update more frequently during active tracking
         locationManager.startUpdatingLocation()
+        
+        // Start updating heading for compass
+        locationManager.startUpdatingHeading()
     }
     
     func stopTracking() {
@@ -61,14 +82,26 @@ class LocationManager: NSObject, ObservableObject {
         
         // Reset to more battery-friendly settings when not actively tracking
         locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        locationManager.distanceFilter = 10
+        locationManager.stopUpdatingHeading()
+    }
+    
+    func centerOnUserLocation() {
+        guard let location = lastLocation else { return }
+        
+        let region = MKCoordinateRegion(
+            center: location.coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+        )
+        
+        self.currentRegion = region
     }
     
     private func reverseGeocode(location: CLLocation) {
         geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, error in
             guard let self = self else { return }
             
-            if let error = error {
-                print("Reverse geocoding error: \(error.localizedDescription)")
+            if error != nil {
                 self.currentAddress = "Unknown Location"
                 return
             }
@@ -88,12 +121,7 @@ class LocationManager: NSObject, ObservableObject {
 
 extension LocationManager: CLLocationManagerDelegate {
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        locationStatus = manager.authorizationStatus
-        
-        if manager.authorizationStatus == .authorizedWhenInUse ||
-           manager.authorizationStatus == .authorizedAlways {
-            locationManager.startUpdatingLocation()
-        }
+        checkLocationAuthorization()
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -101,16 +129,18 @@ extension LocationManager: CLLocationManagerDelegate {
         
         // Only record location if it's accurate enough
         guard location.horizontalAccuracy >= 0 && 
-              location.horizontalAccuracy < 50 else { return }
+              location.horizontalAccuracy < 100 else { return }
         
         lastLocation = location
         
-        // Update the map region to follow user
-        let region = MKCoordinateRegion(
-            center: location.coordinate,
-            span: self.currentRegion.span
-        )
-        self.currentRegion = region
+        // Update the map region to follow user when tracking
+        if isTrackingLocation {
+            let region = MKCoordinateRegion(
+                center: location.coordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+            )
+            self.currentRegion = region
+        }
         
         // Handle reverse geocoding occasionally (not on every update to save API calls)
         if currentAddress == "Unknown Location" {
@@ -125,6 +155,21 @@ extension LocationManager: CLLocationManagerDelegate {
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("Location Manager Error: \(error.localizedDescription)")
+        // Handle common location errors
+        if let clError = error as? CLError {
+            switch clError.code {
+            case .denied:
+                // User denied location permissions
+                isLocationAuthorized = false
+                locationErrorMessage = "Location access denied by user"
+                
+            case .locationUnknown:
+                // GPS signal might be temporarily unavailable
+                locationErrorMessage = "Current location unavailable, please try outdoors or in an area with better GPS signal"
+                
+            default:
+                locationErrorMessage = "Location error: \(clError.localizedDescription)"
+            }
+        }
     }
 } 

@@ -4,9 +4,11 @@ import MapKit
 struct ActiveRideView: View {
     @EnvironmentObject private var locationManager: LocationManager
     @EnvironmentObject private var rideManager: RideManager
+    @EnvironmentObject private var userSettings: UserSettings
     @State private var showingConfirmationDialog = false
     @State private var showingRenameDialog = false
     @State private var rideName = "My Ride"
+    @State private var showExtraTelemetry = false
     
     // Timer for updating the view regularly
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -14,11 +16,7 @@ struct ActiveRideView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Map showing current location and path
-            MapView(
-                region: $locationManager.currentRegion,
-                showsUserLocation: true,
-                trackingMode: .follow
-            )
+            ExtendedMapView(region: $locationManager.currentRegion)
             .ignoresSafeArea(edges: .top)
             .frame(height: 300)
             .overlay(alignment: .topTrailing) {
@@ -36,7 +34,7 @@ struct ActiveRideView: View {
             
             // Stats for current ride
             VStack(spacing: 16) {
-                // Current location
+                // Current location and direction
                 HStack {
                     Image(systemName: "location.fill")
                         .foregroundColor(.blue)
@@ -46,6 +44,15 @@ struct ActiveRideView: View {
                         .lineLimit(1)
                     
                     Spacer()
+                    
+                    if let location = locationManager.lastLocation, location.course >= 0 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "location.north.line")
+                            Text(getDirectionFromCourse(location.course))
+                        }
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    }
                 }
                 .padding(.horizontal)
                 
@@ -77,6 +84,51 @@ struct ActiveRideView: View {
                 }
                 .padding(.horizontal)
                 
+                // Toggle for additional telemetry
+                Button(action: {
+                    withAnimation {
+                        showExtraTelemetry.toggle()
+                    }
+                }) {
+                    HStack {
+                        Text(showExtraTelemetry ? "Hide Advanced Telemetry" : "Show Advanced Telemetry")
+                        Image(systemName: showExtraTelemetry ? "chevron.up" : "chevron.down")
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(.blue)
+                }
+                
+                // Additional telemetry section
+                if showExtraTelemetry {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                        ActiveStatCard(
+                            title: "Altitude",
+                            value: formattedAltitude(),
+                            icon: "mountain.2"
+                        )
+                        
+                        ActiveStatCard(
+                            title: "Elevation Gain",
+                            value: formattedElevationGain(),
+                            icon: "arrow.up.right"
+                        )
+                        
+                        ActiveStatCard(
+                            title: "Heading",
+                            value: formattedHeading(),
+                            icon: "location.north.line"
+                        )
+                        
+                        ActiveStatCard(
+                            title: "GPS Accuracy",
+                            value: formattedAccuracy(),
+                            icon: "scope"
+                        )
+                    }
+                    .padding(.horizontal)
+                    .transition(.opacity)
+                }
+                
                 // Stop button
                 Button(action: {
                     showingConfirmationDialog = true
@@ -102,8 +154,8 @@ struct ActiveRideView: View {
         }
         .onAppear {
             // Update ride name if available
-            if let ride = rideManager.activeRide {
-                rideName = ride.name
+            if rideManager.activeRide != nil {
+                rideName = rideManager.activeRide?.name ?? "My Ride"
             }
         }
         .onReceive(timer) { _ in
@@ -145,10 +197,10 @@ struct ActiveRideView: View {
     // MARK: - Formatting Functions
     
     private func formattedDistance() -> String {
-        guard let ride = rideManager.activeRide else { return "0.00 km" }
+        guard rideManager.activeRide != nil else { return "0.00 \(userSettings.unitSystem.distanceUnit)" }
         
         let locations = locationManager.currentLocationPoints
-        guard locations.count > 1 else { return "0.00 km" }
+        guard locations.count > 1 else { return "0.00 \(userSettings.unitSystem.distanceUnit)" }
         
         var totalDistance = 0.0
         for i in 0..<locations.count-1 {
@@ -158,7 +210,7 @@ struct ActiveRideView: View {
         }
         
         let distanceInKilometers = totalDistance / 1000
-        return String(format: "%.2f km", distanceInKilometers)
+        return userSettings.formatDistance(distanceInKilometers)
     }
     
     private func formattedDuration() -> String {
@@ -174,17 +226,59 @@ struct ActiveRideView: View {
     }
     
     private func formattedCurrentSpeed() -> String {
-        guard let location = locationManager.lastLocation else { return "0 km/h" }
+        guard let location = locationManager.lastLocation else { return "0 \(userSettings.unitSystem.speedUnit)" }
         
         let speedInKmh = max(0, location.speed) * 3.6 // Convert m/s to km/h
-        return String(format: "%.1f km/h", speedInKmh)
+        return userSettings.formatSpeed(speedInKmh)
     }
     
     private func formattedMaxSpeed() -> String {
         let speeds = locationManager.currentLocationPoints.map { $0.speed }
         let maxSpeed = speeds.max() ?? 0
         let speedInKmh = maxSpeed * 3.6 // Convert m/s to km/h
-        return String(format: "%.1f km/h", speedInKmh)
+        return userSettings.formatSpeed(speedInKmh)
+    }
+    
+    private func formattedAltitude() -> String {
+        guard let location = locationManager.lastLocation else { return "0 \(userSettings.unitSystem.altitudeUnit)" }
+        return userSettings.formatAltitude(location.altitude)
+    }
+    
+    private func formattedElevationGain() -> String {
+        guard locationManager.currentLocationPoints.count > 1 else { 
+            return "0 \(userSettings.unitSystem.altitudeUnit)" 
+        }
+        
+        var ascent = 0.0
+        for i in 1..<locationManager.currentLocationPoints.count {
+            let diff = locationManager.currentLocationPoints[i].altitude - locationManager.currentLocationPoints[i-1].altitude
+            if diff > 0 {
+                ascent += diff
+            }
+        }
+        return userSettings.formatAltitude(ascent)
+    }
+    
+    private func formattedHeading() -> String {
+        guard let location = locationManager.lastLocation, location.course >= 0 else { 
+            return "N/A" 
+        }
+        
+        return getDirectionFromCourse(location.course)
+    }
+    
+    private func formattedAccuracy() -> String {
+        guard let location = locationManager.lastLocation else { 
+            return "N/A" 
+        }
+        
+        return "\(Int(location.horizontalAccuracy))m"
+    }
+    
+    private func getDirectionFromCourse(_ course: Double) -> String {
+        let directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW", "N"]
+        let index = Int(round(course.truncatingRemainder(dividingBy: 360) / 45))
+        return directions[index]
     }
 }
 

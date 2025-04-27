@@ -16,6 +16,11 @@ struct MapView: UIViewRepresentable {
         mapView.showsUserLocation = showsUserLocation
         mapView.userTrackingMode = trackingMode
         
+        // Add map controls
+        mapView.showsCompass = true
+        mapView.showsScale = true
+        mapView.showsUserLocation = showsUserLocation
+        
         // Add polylines if provided
         for polyline in polylines {
             mapView.addOverlay(polyline)
@@ -96,6 +101,76 @@ struct MapView: UIViewRepresentable {
             }
             
             return annotationView
+        }
+    }
+}
+
+// MapView with additional control buttons
+struct ExtendedMapView: View {
+    @Binding var region: MKCoordinateRegion
+    @State private var trackingMode: MKUserTrackingMode = .none
+    var polylines: [MKPolyline] = []
+    var annotations: [MKPointAnnotation] = []
+    @EnvironmentObject private var locationManager: LocationManager
+    
+    var body: some View {
+        ZStack {
+            MapView(
+                region: $region,
+                showsUserLocation: true,
+                polylines: polylines,
+                annotations: annotations,
+                trackingMode: trackingMode
+            )
+            
+            VStack {
+                Spacer()
+                
+                HStack {
+                    Spacer()
+                    
+                    VStack(spacing: 10) {
+                        // Center on user button
+                        Button(action: {
+                            if let location = locationManager.lastLocation {
+                                region = MKCoordinateRegion(
+                                    center: location.coordinate,
+                                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                                )
+                                trackingMode = .follow
+                            } else {
+                                locationManager.requestLocationPermissions()
+                            }
+                        }) {
+                            Image(systemName: "location.fill")
+                                .foregroundColor(.blue)
+                                .padding(12)
+                                .background(Color.white)
+                                .clipShape(Circle())
+                                .shadow(radius: 2)
+                        }
+                        
+                        // Compass/heading button
+                        Button(action: {
+                            trackingMode = (trackingMode == .followWithHeading) ? .follow : .followWithHeading
+                        }) {
+                            Image(systemName: "location.north.line.fill")
+                                .foregroundColor(trackingMode == .followWithHeading ? .blue : .gray)
+                                .padding(12)
+                                .background(Color.white)
+                                .clipShape(Circle())
+                                .shadow(radius: 2)
+                        }
+                    }
+                    .padding([.trailing, .bottom], 16)
+                }
+            }
+        }
+        .onAppear {
+            // Request location permissions if needed
+            if !locationManager.isLocationAuthorized {
+                locationManager.requestLocationPermissions()
+            }
         }
     }
 }

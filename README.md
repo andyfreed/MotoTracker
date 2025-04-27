@@ -1,33 +1,37 @@
 # MotoTracker
 
-MotoTracker is an iOS app that lets motorcycle enthusiasts track and record their rides using GPS technology.
+A Swift iOS app for tracking motorcycle rides using GPS.
 
 ## Features
 
-- **Ride Tracking**: Record your motorcycle routes with precise GPS tracking
-- **Live Stats**: View real-time data including distance, duration, current speed, and max speed
-- **Ride History**: Browse and manage your past rides with detailed statistics
-- **Ride Details**: View your routes on a map with start and end points
-- **Performance Stats**: Track overall riding statistics including total distance and average speed
+- GPS tracking of motorcycle rides
+- Detailed ride statistics (distance, speed, duration)
+- Ride history with maps
+- Summary statistics across all rides
 
 ## Requirements
 
-- iOS 17.0+
-- Xcode 15.0+
+- iOS 15.0+
+- Xcode 13.0+
+- Swift 5.0+
 
-## Getting Started
+## Installation
 
 1. Clone the repository
-2. Open `MotoTracker.xcodeproj` in Xcode
-3. Select your development team in the project settings
-4. Build and run on your device
+2. Open MotoTracker.xcodeproj in Xcode
+3. Build and run the app on your device or simulator
+
+## Usage
+
+1. Launch the app
+2. Grant location permissions
+3. Tap "Start Tracking" to begin recording your ride
+4. Tap "Stop Ride" when finished to save or discard your ride data
+5. View your ride history and statistics in the respective tabs
 
 ## Privacy
 
-MotoTracker requires the following permissions:
-- Location access (including background location)
-
-All ride data is stored locally on your device.
+This app requires location permissions to track your rides. Location data is stored locally on your device.
 
 ## License
 
