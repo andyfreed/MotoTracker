@@ -74,11 +74,9 @@ struct SimpleNavigationView: View {
                                             Text(item.name ?? "Unknown Location")
                                                 .font(.headline)
                                             
-                                            if let placemark = item.placemark {
-                                                Text(formatAddress(placemark))
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                            }
+                                            Text(formatAddress(item.placemark))
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
                                         }
                                         .padding()
                                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -197,15 +195,18 @@ struct SimpleNavigationView: View {
         let searchRequest = MKLocalSearch.Request()
         searchRequest.naturalLanguageQuery = destination
         
-        if let region = locationManager.currentRegion {
-            searchRequest.region = region
-        } else if let location = locationManager.lastLocation {
-            searchRequest.region = MKCoordinateRegion(
+        // Use current region but with a fallback
+        var searchRegion = locationManager.currentRegion
+        
+        // If we have a last location, make sure region is centered on it
+        if let location = locationManager.lastLocation {
+            searchRegion = MKCoordinateRegion(
                 center: location.coordinate,
-                latitudinalMeters: 5000,
-                longitudinalMeters: 5000
+                span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
             )
         }
+        
+        searchRequest.region = searchRegion
         
         let search = MKLocalSearch(request: searchRequest)
         search.start { response, error in
