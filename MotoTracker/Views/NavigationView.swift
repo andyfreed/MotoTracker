@@ -1,7 +1,7 @@
 import SwiftUI
 import MapKit
 
-struct NavigationView: View {
+struct NavigationViewContent: View {
     @EnvironmentObject private var locationManager: LocationManager
     @EnvironmentObject private var navigationManager: NavigationManager
     @EnvironmentObject private var userSettings: UserSettings
@@ -708,9 +708,9 @@ extension MKDirectionsTransportType {
     }
 }
 
-struct NavigationView_Previews: PreviewProvider {
+struct NavigationViewContent_Previews: PreviewProvider {
     static var previews: some View {
-        NavigationView()
+        NavigationViewContent()
             .environmentObject(LocationManager())
             .environmentObject(NavigationManager())
             .environmentObject(UserSettings())

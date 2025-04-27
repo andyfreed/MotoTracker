@@ -4,7 +4,8 @@ import Combine
 import SwiftUI
 import AVFoundation
 
-class NavigationManager: NSObject, ObservableObject {
+// Extend the NavigationManager class that was forward-declared in MotoTrackerApp.swift
+extension NavigationManager {
     // MARK: - Published Properties
     @Published var destination: MKMapItem?
     @Published var currentRoute: MKRoute?
@@ -23,7 +24,6 @@ class NavigationManager: NSObject, ObservableObject {
     @Published var searchError: String?
     
     // MARK: - Private Properties
-    private var locationManager: LocationManager?
     private var cancellables = Set<AnyCancellable>()
     private var monitoredRegions: [String: MKCoordinateRegion] = [:]
     private var stepProgress: Progress?
@@ -32,17 +32,23 @@ class NavigationManager: NSObject, ObservableObject {
     private var navigatingToWaypoint: Bool = false
     
     // MARK: - Initialization
-    init(locationManager: LocationManager? = nil) {
-        super.init()
+    convenience init(locationManager: LocationManager? = nil) {
+        self.init()
         self.locationManager = locationManager
         
-        // Subscribe to location updates
-        locationManager?.$lastLocation
-            .compactMap { $0 }
-            .sink { [weak self] location in
-                self?.updateNavigation(with: location)
-            }
-            .store(in: &cancellables)
+        setupLocationObservation()
+    }
+    
+    func setupLocationObservation() {
+        // If locationManager is set, subscribe to updates
+        if let locationManager = self.locationManager {
+            locationManager.$lastLocation
+                .compactMap { $0 }
+                .sink { [weak self] location in
+                    self?.updateNavigation(with: location)
+                }
+                .store(in: &cancellables)
+        }
     }
     
     // MARK: - Public Methods

@@ -11,6 +11,11 @@ struct ContentView: View {
     @State private var showLocationPermissionAlert = false
     @State private var isLoggedIn = false
     @State private var username: String = ""
+    @State private var navigationDestination: String = ""
+    @State private var showingDestinationSearchResults = false
+    @State private var avoidHighways: Bool = false
+    @State private var avoidTolls: Bool = false
+    @State private var showNavigationAlert: Bool = false
     
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -140,11 +145,182 @@ struct ContentView: View {
             .tag(0)
             
             // Navigation Tab
-            NavigationView()
-                .tabItem {
-                    Label("Navigate", systemImage: "location.fill")
+            NavigationView {
+                // Enhanced navigation view implementation
+                ZStack(alignment: .top) {
+                    // Map view
+                    ExtendedMapView(region: $locationManager.currentRegion)
+                        .ignoresSafeArea()
+                    
+                    // Navigation controls
+                    VStack(spacing: 0) {
+                        // Search bar
+                        VStack {
+                            HStack {
+                                Image(systemName: "magnifyingglass")
+                                    .foregroundColor(.gray)
+                                
+                                TextField("Search for destination", text: $navigationDestination, onCommit: {
+                                    if !navigationDestination.isEmpty {
+                                        searchForDestination()
+                                    }
+                                })
+                                .foregroundColor(.primary)
+                                
+                                if !navigationDestination.isEmpty {
+                                    Button(action: {
+                                        navigationDestination = ""
+                                    }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundColor(.gray)
+                                    }
+                                }
+                            }
+                            .padding(10)
+                            .background(Color(.systemBackground))
+                            .cornerRadius(10)
+                            .padding(.horizontal)
+                            .padding(.top, 50)
+                            .shadow(color: .black.opacity(0.2), radius: 2)
+                            
+                            // Show real search results from the NavigationManager
+                            if !navigationManager.searchResults.isEmpty {
+                                List {
+                                    ForEach(navigationManager.searchResults, id: \.self) { item in
+                                        Button(action: {
+                                            // Select this destination
+                                            selectDestination(item)
+                                        }) {
+                                            VStack(alignment: .leading) {
+                                                Text(item.name ?? "Unknown Location")
+                                                    .font(.headline)
+                                                
+                                                if let placemark = item.placemark {
+                                                    Text(formatAddress(placemark))
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                .frame(height: 200)
+                                .background(Color(.systemBackground))
+                                .cornerRadius(10)
+                                .padding(.horizontal)
+                            } else if navigationManager.isSearching {
+                                HStack {
+                                    Spacer()
+                                    ProgressView()
+                                        .padding()
+                                    Spacer()
+                                }
+                            } else if navigationManager.searchError != nil {
+                                Text(navigationManager.searchError ?? "Error")
+                                    .foregroundColor(.red)
+                                    .padding()
+                            }
+                        }
+                        .background(Color(.systemBackground).opacity(0.8))
+                        
+                        Spacer()
+                        
+                        // Bottom panel
+                        VStack(spacing: 10) {
+                            // Show route information if we have a route
+                            if let route = navigationManager.currentRoute, let destination = navigationManager.destination {
+                                VStack(spacing: 8) {
+                                    Text(destination.name ?? "Destination")
+                                        .font(.headline)
+                                        .lineLimit(1)
+                                    
+                                    HStack(spacing: 20) {
+                                        VStack {
+                                            Text(navigationManager.formattedRemainingDistance(with: userSettings))
+                                                .font(.title3)
+                                                .fontWeight(.bold)
+                                            
+                                            Text("Distance")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        
+                                        Divider()
+                                            .frame(height: 30)
+                                        
+                                        VStack {
+                                            Text(navigationManager.formattedRemainingTime())
+                                                .font(.title3)
+                                                .fontWeight(.bold)
+                                            
+                                            Text("Time")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    .padding(.vertical, 8)
+                                }
+                                .padding(.horizontal)
+                            } else {
+                                Text("Route Options")
+                                    .font(.headline)
+                            }
+                            
+                            // Route options
+                            HStack {
+                                Toggle("Avoid Highways", isOn: $avoidHighways)
+                                Spacer()
+                            }
+                            .padding(.horizontal)
+                            
+                            HStack {
+                                Toggle("Avoid Tolls", isOn: $avoidTolls)
+                                Spacer()
+                            }
+                            .padding(.horizontal)
+                            
+                            // Navigation button - change label based on whether we have a route
+                            Button(action: {
+                                if navigationManager.currentRoute == nil && navigationDestination.isEmpty {
+                                    showNavigationAlert = true
+                                } else if navigationManager.currentRoute != nil {
+                                    startNavigation()
+                                } else if !navigationDestination.isEmpty {
+                                    // We have a destination but no route yet, search for it
+                                    searchForDestination()
+                                }
+                            }) {
+                                Text(navigationManager.currentRoute != nil ? "Start Navigation" : "Search")
+                                    .font(.headline)
+                                    .padding()
+                                    .frame(maxWidth: .infinity)
+                                    .background(Color.blue)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(10)
+                            }
+                            .padding()
+                        }
+                        .padding(.bottom)
+                        .background(Color(.systemBackground))
+                        .cornerRadius(12)
+                        .shadow(color: .black.opacity(0.2), radius: 5, y: -2)
+                        .padding()
+                    }
                 }
-                .tag(5)
+                .navigationTitle("Navigation")
+                .navigationBarTitleDisplayMode(.inline)
+                .alert(isPresented: $showNavigationAlert) {
+                    Alert(
+                        title: Text("Destination Required"),
+                        message: Text("Please enter a destination before starting navigation."),
+                        dismissButton: .default(Text("OK"))
+                    )
+                }
+            }
+            .tabItem {
+                Label("Navigate", systemImage: "location.fill")
+            }
+            .tag(5)
             
             // History Tab
             NavigationView {
@@ -371,6 +547,153 @@ struct ContentView: View {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+    
+    // MARK: - Navigation Methods
+    
+    private func searchForDestination() {
+        // Hide any previously shown mock results
+        showingDestinationSearchResults = false
+        
+        // Directly invoke the method on the NavigationManager instance
+        let query = navigationDestination
+        let location = locationManager.lastLocation
+        let region = locationManager.currentRegion
+        
+        // Create a search request manually since we can't directly call methods
+        DispatchQueue.main.async {
+            self.navigationManager.isSearching = true
+            self.navigationManager.searchError = nil
+            self.navigationManager.searchResults = []
+            
+            let searchRequest = MKLocalSearch.Request()
+            searchRequest.naturalLanguageQuery = query
+            
+            if let region = region {
+                searchRequest.region = region
+            } else if let location = location {
+                searchRequest.region = MKCoordinateRegion(
+                    center: location.coordinate,
+                    latitudinalMeters: 5000,
+                    longitudinalMeters: 5000
+                )
+            }
+            
+            let search = MKLocalSearch(request: searchRequest)
+            search.start { response, error in
+                DispatchQueue.main.async {
+                    self.navigationManager.isSearching = false
+                    
+                    if let error = error {
+                        self.navigationManager.searchError = error.localizedDescription
+                        return
+                    }
+                    
+                    guard let response = response else {
+                        self.navigationManager.searchError = "No results found"
+                        return
+                    }
+                    
+                    self.navigationManager.searchResults = response.mapItems
+                }
+            }
+        }
+    }
+    
+    private func selectDestination(_ mapItem: MKMapItem) {
+        // We've selected a destination from search results
+        navigationDestination = mapItem.name ?? "Selected Location"
+        
+        // Create a route calculation request
+        DispatchQueue.main.async {
+            self.navigationManager.destination = mapItem
+            self.navigationManager.isCalculatingRoute = true
+            self.navigationManager.navigationError = nil
+            self.navigationManager.currentRoute = nil
+            self.navigationManager.allRoutes = []
+            
+            let request = MKDirections.Request()
+            
+            // Set source location
+            if let location = self.locationManager.lastLocation {
+                request.source = MKMapItem(placemark: MKPlacemark(coordinate: location.coordinate))
+            } else {
+                self.navigationManager.isCalculatingRoute = false
+                self.navigationManager.navigationError = "Current location is not available"
+                return
+            }
+            
+            request.destination = mapItem
+            request.transportType = .automobile
+            request.requestsAlternateRoutes = true
+            
+            let directions = MKDirections(request: request)
+            directions.calculate { response, error in
+                DispatchQueue.main.async {
+                    self.navigationManager.isCalculatingRoute = false
+                    
+                    if let error = error {
+                        self.navigationManager.navigationError = error.localizedDescription
+                        return
+                    }
+                    
+                    guard let response = response, !response.routes.isEmpty else {
+                        self.navigationManager.navigationError = "No routes found"
+                        return
+                    }
+                    
+                    self.navigationManager.allRoutes = response.routes
+                    self.navigationManager.currentRoute = response.routes[0] // Select the first route
+                    
+                    // Prepare the route for navigation
+                    guard let route = self.navigationManager.currentRoute else { return }
+                    
+                    // Set initial values
+                    self.navigationManager.remainingDistance = route.distance
+                    self.navigationManager.remainingTime = route.expectedTravelTime
+                    
+                    // Setup initial step
+                    if let firstStep = route.steps.first {
+                        self.navigationManager.currentStep = firstStep
+                        self.navigationManager.nextStep = route.steps.count > 1 ? route.steps[1] : nil
+                        self.navigationManager.currentStepRemainingDistance = firstStep.distance
+                    }
+                }
+            }
+        }
+    }
+    
+    private func startNavigation() {
+        if navigationManager.currentRoute == nil {
+            showNavigationAlert = true
+            return
+        }
+        
+        DispatchQueue.main.async {
+            self.navigationManager.routeIsActive = true
+            self.navigationManager.currentStepIndex = 0
+            
+            // Initialize with the first step
+            if let firstStep = self.navigationManager.currentRoute?.steps.first {
+                self.navigationManager.currentStep = firstStep
+                self.navigationManager.nextStep = self.navigationManager.currentRoute?.steps.count ?? 0 > 1 ? self.navigationManager.currentRoute?.steps[1] : nil
+            }
+            
+            // Announce that we're starting navigation
+            print("Starting navigation to \(self.navigationDestination)")
+        }
+    }
+    
+    // Helper to format address from placemark
+    private func formatAddress(_ placemark: CLPlacemark) -> String {
+        let components = [
+            placemark.thoroughfare,
+            placemark.locality,
+            placemark.administrativeArea,
+            placemark.country
+        ].compactMap { $0 }
+        
+        return components.joined(separator: ", ")
     }
 }
 

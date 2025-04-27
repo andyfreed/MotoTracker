@@ -1,6 +1,8 @@
 import SwiftUI
 import Foundation
 import Combine
+import MapKit
+import CoreLocation
 
 // Include UserSettings class directly
 class UserSettings: ObservableObject {
@@ -89,27 +91,29 @@ class UserSettings: ObservableObject {
     }
 }
 
+// Forward declaration of the NavigationManager class to avoid circular dependencies
+@objc class NavigationManager: NSObject, ObservableObject {
+    var locationManager: LocationManager?
+}
+
 @main
 struct MotoTrackerApp: App {
+    // MARK: - Properties
     @StateObject private var locationManager = LocationManager()
     @StateObject private var rideManager = RideManager()
-    @StateObject private var userSettings = UserSettings()
     @StateObject private var navigationManager = NavigationManager()
-    // Temporarily comment out until we solve import issues
-    // @StateObject private var supabaseManager = SupabaseManager.shared
+    @StateObject private var userSettings = UserSettings()
     
+    // MARK: - Body
     var body: some Scene {
         WindowGroup {
-            // Initialize NavigationManager with LocationManager
-            // This needs to be done after both have been created
             ContentView()
                 .environmentObject(locationManager)
                 .environmentObject(rideManager)
-                .environmentObject(userSettings)
                 .environmentObject(navigationManager)
+                .environmentObject(userSettings)
                 .onAppear {
-                    // Set the locationManager for NavigationManager
-                    navigationManager.locationManager = locationManager
+                    self.navigationManager.locationManager = self.locationManager
                 }
         }
     }
