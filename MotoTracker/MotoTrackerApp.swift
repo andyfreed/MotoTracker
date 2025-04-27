@@ -94,16 +94,23 @@ struct MotoTrackerApp: App {
     @StateObject private var locationManager = LocationManager()
     @StateObject private var rideManager = RideManager()
     @StateObject private var userSettings = UserSettings()
+    @StateObject private var navigationManager = NavigationManager()
     // Temporarily comment out until we solve import issues
     // @StateObject private var supabaseManager = SupabaseManager.shared
     
     var body: some Scene {
         WindowGroup {
-            // Use ContentView directly
+            // Initialize NavigationManager with LocationManager
+            // This needs to be done after both have been created
             ContentView()
                 .environmentObject(locationManager)
                 .environmentObject(rideManager)
                 .environmentObject(userSettings)
+                .environmentObject(navigationManager)
+                .onAppear {
+                    // Set the locationManager for NavigationManager
+                    navigationManager.locationManager = locationManager
+                }
         }
     }
 } 

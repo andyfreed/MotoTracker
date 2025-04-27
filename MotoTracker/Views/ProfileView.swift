@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ProfileView: View {
     @EnvironmentObject private var supabaseManager: SupabaseManager
+    @EnvironmentObject private var rideManager: RideManager
+    @EnvironmentObject private var userSettings: UserSettings
     @State private var showingLogoutAlert = false
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -156,9 +158,9 @@ struct ProfileView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             
             HStack(spacing: 20) {
-                statItem(count: "24", title: "Rides")
-                statItem(count: "1,250", title: "Miles")
-                statItem(count: "32", title: "Hours")
+                statItem(count: "\(rideManager.rides.count)", title: "Rides")
+                statItem(count: rideManager.formattedTotalDistance(with: userSettings), title: "Distance")
+                statItem(count: rideManager.formattedTotalDuration, title: "Duration")
             }
         }
         .padding()
@@ -258,5 +260,7 @@ struct ProfileView_Previews: PreviewProvider {
     static var previews: some View {
         ProfileView()
             .environmentObject(SupabaseManager.shared)
+            .environmentObject(RideManager())
+            .environmentObject(UserSettings())
     }
 } 

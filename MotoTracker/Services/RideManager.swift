@@ -105,6 +105,11 @@ class RideManager: ObservableObject {
         rides.reduce(0) { $0 + $1.distance }
     }
     
+    func formattedTotalDistance(with settings: UserSettings) -> String {
+        let distanceInKilometers = totalDistance / 1000
+        return settings.formatDistance(distanceInKilometers)
+    }
+    
     var formattedTotalDistance: String {
         let distanceInKilometers = totalDistance / 1000
         return String(format: "%.2f km", distanceInKilometers)
@@ -126,6 +131,11 @@ class RideManager: ObservableObject {
         
         let totalSpeed = rides.reduce(0) { $0 + $1.averageSpeed }
         return totalSpeed / Double(rides.count)
+    }
+    
+    func formattedAverageSpeed(with settings: UserSettings) -> String {
+        let speedInKmh = averageSpeed * 3.6 // Convert m/s to km/h
+        return settings.formatSpeed(speedInKmh)
     }
     
     var formattedAverageSpeed: String {

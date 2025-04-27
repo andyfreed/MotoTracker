@@ -86,6 +86,7 @@ struct Ride: Identifiable, Codable {
     }
     
     var formattedDistance: String {
+        // When UserSettings not available, use metric as default
         let distanceInKilometers = distance / 1000
         return String(format: "%.2f km", distanceInKilometers)
     }
@@ -98,6 +99,7 @@ struct Ride: Identifiable, Codable {
     }
     
     var formattedAverageSpeed: String {
+        // When UserSettings not available, use metric as default
         let speedInKmh = averageSpeed * 3.6 // Convert m/s to km/h
         return String(format: "%.1f km/h", speedInKmh)
     }
@@ -107,6 +109,7 @@ struct Ride: Identifiable, Codable {
     }
     
     var formattedMaxSpeed: String {
+        // When UserSettings not available, use metric as default
         let speedInKmh = maxSpeed * 3.6 // Convert m/s to km/h
         return String(format: "%.1f km/h", speedInKmh)
     }

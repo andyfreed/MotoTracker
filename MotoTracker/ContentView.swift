@@ -6,6 +6,7 @@ struct ContentView: View {
     @EnvironmentObject private var locationManager: LocationManager
     @EnvironmentObject private var rideManager: RideManager
     @EnvironmentObject private var userSettings: UserSettings
+    @EnvironmentObject private var navigationManager: NavigationManager
     @State private var selectedTab = 0
     @State private var showLocationPermissionAlert = false
     @State private var isLoggedIn = false
@@ -138,6 +139,13 @@ struct ContentView: View {
             }
             .tag(0)
             
+            // Navigation Tab
+            NavigationView()
+                .tabItem {
+                    Label("Navigate", systemImage: "location.fill")
+                }
+                .tag(5)
+            
             // History Tab
             NavigationView {
                 List {
@@ -172,7 +180,7 @@ struct ContentView: View {
                     
                     InlineStatCard(
                         title: "Total Distance",
-                        value: rideManager.formattedTotalDistance,
+                        value: rideManager.formattedTotalDistance(with: userSettings),
                         icon: "map"
                     )
                     
@@ -184,7 +192,7 @@ struct ContentView: View {
                     
                     InlineStatCard(
                         title: "Average Speed",
-                        value: rideManager.formattedAverageSpeed,
+                        value: rideManager.formattedAverageSpeed(with: userSettings),
                         icon: "speedometer"
                     )
                     

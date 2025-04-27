@@ -2,6 +2,7 @@ import SwiftUI
 
 struct StatsView: View {
     @EnvironmentObject private var rideManager: RideManager
+    @EnvironmentObject private var userSettings: UserSettings
     
     var body: some View {
         ScrollView {
@@ -34,7 +35,7 @@ struct StatsView: View {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
                         StatsCard(
                             title: "Total Distance",
-                            value: rideManager.formattedTotalDistance,
+                            value: rideManager.formattedTotalDistance(with: userSettings),
                             icon: "map"
                         )
                         
@@ -46,20 +47,20 @@ struct StatsView: View {
                         
                         StatsCard(
                             title: "Avg. Speed",
-                            value: rideManager.formattedAverageSpeed,
+                            value: rideManager.formattedAverageSpeed(with: userSettings),
                             icon: "speedometer"
                         )
                         
                         if let fastestRide = rideManager.fastestRide {
                             StatsCard(
                                 title: "Top Speed",
-                                value: fastestRide.formattedMaxSpeed,
+                                value: fastestRide.formattedMaxSpeed(with: userSettings),
                                 icon: "hare"
                             )
                         } else {
                             StatsCard(
                                 title: "Top Speed",
-                                value: "0 km/h",
+                                value: "0 \(userSettings.unitSystem.speedUnit)",
                                 icon: "hare"
                             )
                         }
@@ -87,7 +88,7 @@ struct StatsView: View {
                             TopRideCard(
                                 title: "Longest Ride",
                                 rideName: longestRide.name,
-                                value: longestRide.formattedDistance,
+                                value: longestRide.formattedDistance(with: userSettings),
                                 date: longestRide.startTime
                             )
                         }
@@ -97,7 +98,7 @@ struct StatsView: View {
                             TopRideCard(
                                 title: "Fastest Ride",
                                 rideName: fastestRide.name,
-                                value: fastestRide.formattedAverageSpeed,
+                                value: fastestRide.formattedAverageSpeed(with: userSettings),
                                 date: fastestRide.startTime
                             )
                         }
