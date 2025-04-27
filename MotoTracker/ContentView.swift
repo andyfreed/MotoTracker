@@ -16,12 +16,20 @@ struct SimpleNavigationView: View {
     @State private var showNavigationAlert: Bool = false
     @State private var avoidHighways: Bool = false
     @State private var avoidTolls: Bool = false
+    @State private var calculatedRoute: MKRoute? = nil
+    @State private var isCalculatingRoute: Bool = false
+    @State private var routeDistance: CLLocationDistance = 0
+    @State private var routeTime: TimeInterval = 0
     
     var body: some View {
         ZStack(alignment: .top) {
-            // Map view
-            ExtendedMapView(region: $locationManager.currentRegion)
-                .ignoresSafeArea()
+            // Map view with route and destination
+            ExtendedMapView(
+                region: $locationManager.currentRegion,
+                route: calculatedRoute,
+                destination: selectedMapItem?.placemark.coordinate
+            )
+            .ignoresSafeArea()
             
             // Navigation controls
             VStack(spacing: 0) {
@@ -40,6 +48,8 @@ struct SimpleNavigationView: View {
                             Button(action: {
                                 destination = ""
                                 searchResults = []
+                                selectedMapItem = nil
+                                calculatedRoute = nil
                             }) {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundColor(.gray)
@@ -69,6 +79,7 @@ struct SimpleNavigationView: View {
                                         selectedMapItem = item
                                         destination = item.name ?? "Selected destination"
                                         searchResults = []
+                                        calculateRouteToDestination(item)
                                     }) {
                                         VStack(alignment: .leading) {
                                             Text(item.name ?? "Unknown Location")
@@ -115,6 +126,43 @@ struct SimpleNavigationView: View {
                         Text(item.name ?? "Selected destination")
                             .font(.headline)
                             .padding(.top)
+                            
+                        // Show route info if we have calculated a route
+                        if let route = calculatedRoute {
+                            HStack(spacing: 20) {
+                                VStack {
+                                    Text(formatDistance(route.distance))
+                                        .font(.title3)
+                                        .fontWeight(.bold)
+                                    
+                                    Text("Distance")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                Divider()
+                                    .frame(height: 30)
+                                
+                                VStack {
+                                    Text(formatTime(route.expectedTravelTime))
+                                        .font(.title3)
+                                        .fontWeight(.bold)
+                                    
+                                    Text("Time")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        } else if isCalculatingRoute {
+                            HStack {
+                                Spacer()
+                                ProgressView()
+                                    .padding()
+                                Text("Calculating route...")
+                                Spacer()
+                            }
+                        }
                     } else {
                         Text("Route Options")
                             .font(.headline)
@@ -124,27 +172,39 @@ struct SimpleNavigationView: View {
                     // Route options
                     HStack {
                         Toggle("Avoid Highways", isOn: $avoidHighways)
+                            .onChange(of: avoidHighways) { _ in
+                                if let mapItem = selectedMapItem {
+                                    calculateRouteToDestination(mapItem)
+                                }
+                            }
                         Spacer()
                     }
                     .padding(.horizontal)
                     
                     HStack {
                         Toggle("Avoid Tolls", isOn: $avoidTolls)
+                            .onChange(of: avoidTolls) { _ in
+                                if let mapItem = selectedMapItem {
+                                    calculateRouteToDestination(mapItem)
+                                }
+                            }
                         Spacer()
                     }
                     .padding(.horizontal)
                     
                     // Navigation button
                     Button(action: {
-                        if selectedMapItem != nil {
+                        if selectedMapItem != nil && calculatedRoute != nil {
                             startNavigation()
+                        } else if selectedMapItem != nil {
+                            calculateRouteToDestination(selectedMapItem!)
                         } else if !destination.isEmpty {
                             performSearch()
                         } else {
                             showNavigationAlert = true
                         }
                     }) {
-                        Text(selectedMapItem != nil ? "Start Navigation" : "Search")
+                        Text(buttonTitle)
                             .font(.headline)
                             .padding()
                             .frame(maxWidth: .infinity)
@@ -169,6 +229,90 @@ struct SimpleNavigationView: View {
                 message: Text("Please enter a destination before starting navigation."),
                 dismissButton: .default(Text("OK"))
             )
+        }
+        .onAppear {
+            // Refresh location when view appears
+            locationManager.startUpdatingLocation()
+        }
+    }
+    
+    // Button title based on state
+    private var buttonTitle: String {
+        if calculatedRoute != nil {
+            return "Start Navigation"
+        } else if selectedMapItem != nil {
+            return "Calculate Route"
+        } else {
+            return "Search"
+        }
+    }
+    
+    // Format distance in a user-friendly way
+    private func formatDistance(_ distance: CLLocationDistance) -> String {
+        let distanceInKm = distance / 1000
+        return userSettings.formatDistance(distanceInKm)
+    }
+    
+    // Format time in a user-friendly way
+    private func formatTime(_ time: TimeInterval) -> String {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = [.hour, .minute]
+        formatter.unitsStyle = .abbreviated
+        return formatter.string(from: time) ?? "Unknown"
+    }
+    
+    // Function to calculate route to the destination
+    private func calculateRouteToDestination(_ mapItem: MKMapItem) {
+        isCalculatingRoute = true
+        searchError = nil
+        calculatedRoute = nil
+        
+        let request = MKDirections.Request()
+        
+        // Set source location
+        if let location = locationManager.lastLocation {
+            request.source = MKMapItem(placemark: MKPlacemark(coordinate: location.coordinate))
+        } else {
+            isCalculatingRoute = false
+            searchError = "Current location is not available"
+            return
+        }
+        
+        // Set destination and options
+        request.destination = mapItem
+        request.transportType = .automobile
+        
+        // Apply route options from toggles
+        if avoidHighways {
+            request.highwayPreference = .avoid
+        }
+        if avoidTolls {
+            request.tollPreference = .avoid
+        }
+        
+        // Calculate route
+        let directions = MKDirections(request: request)
+        directions.calculate { [weak self] response, error in
+            guard let self = self else { return }
+            
+            DispatchQueue.main.async {
+                self.isCalculatingRoute = false
+                
+                if let error = error {
+                    self.searchError = "Route error: \(error.localizedDescription)"
+                    return
+                }
+                
+                guard let response = response, !response.routes.isEmpty else {
+                    self.searchError = "No routes found"
+                    return
+                }
+                
+                // Get the best route
+                self.calculatedRoute = response.routes[0]
+                self.routeDistance = response.routes[0].distance
+                self.routeTime = response.routes[0].expectedTravelTime
+            }
         }
     }
     
@@ -228,16 +372,76 @@ struct SimpleNavigationView: View {
         }
     }
     
-    // Function to start navigation (just prints for now)
+    // Function to start navigation with selected destination
     private func startNavigation() {
         guard let mapItem = selectedMapItem else {
             showNavigationAlert = true
             return
         }
         
-        print("Starting navigation to: \(mapItem.name ?? "destination")")
-        print("Would use navigationManager functionality if properly connected")
-        print("Options - Avoid highways: \(avoidHighways), Avoid tolls: \(avoidTolls)")
+        // Calculate route to destination
+        let request = MKDirections.Request()
+        
+        // Set source location
+        if let location = locationManager.lastLocation {
+            request.source = MKMapItem(placemark: MKPlacemark(coordinate: location.coordinate))
+        } else {
+            print("Error: Current location is not available")
+            return
+        }
+        
+        // Set destination and options
+        request.destination = mapItem
+        request.transportType = .automobile
+        
+        // Apply route options from toggles
+        if avoidHighways {
+            request.highwayPreference = .avoid
+        }
+        if avoidTolls {
+            request.tollPreference = .avoid
+        }
+        
+        // Calculate route
+        let directions = MKDirections(request: request)
+        directions.calculate { [weak self] response, error in
+            guard let self = self else { return }
+            
+            DispatchQueue.main.async {
+                if let error = error {
+                    self.searchError = "Route error: \(error.localizedDescription)"
+                    return
+                }
+                
+                guard let response = response, !response.routes.isEmpty else {
+                    self.searchError = "No routes found"
+                    return
+                }
+                
+                // Get the best route
+                let route = response.routes[0]
+                
+                // Store route information on the NavigationManager using notifications
+                let routeInfo: [String: Any] = [
+                    "route": route,
+                    "destination": mapItem,
+                    "avoidHighways": self.avoidHighways,
+                    "avoidTolls": self.avoidTolls
+                ]
+                
+                // Use NotificationCenter to communicate with NavigationManager
+                NotificationCenter.default.post(
+                    name: Notification.Name("StartNavigation"),
+                    object: nil,
+                    userInfo: routeInfo
+                )
+                
+                // Provide feedback to user
+                self.searchError = nil
+                print("Navigation started to: \(mapItem.name ?? "destination")")
+                print("Route distance: \(route.distance/1000) km, estimated time: \(Int(route.expectedTravelTime/60)) minutes")
+            }
+        }
     }
 }
 

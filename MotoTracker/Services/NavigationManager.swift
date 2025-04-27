@@ -37,6 +37,7 @@ extension NavigationManager {
         self.locationManager = locationManager
         
         setupLocationObservation()
+        setupNotificationObservers()
     }
     
     func setupLocationObservation() {
@@ -49,6 +50,55 @@ extension NavigationManager {
                 }
                 .store(in: &cancellables)
         }
+    }
+    
+    // Setup notification observers
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleStartNavigation(_:)),
+            name: Notification.Name("StartNavigation"),
+            object: nil
+        )
+    }
+    
+    // Handle navigation notification from the UI
+    @objc private func handleStartNavigation(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let route = userInfo["route"] as? MKRoute,
+              let destination = userInfo["destination"] as? MKMapItem else {
+            print("Navigation failed: Missing required information")
+            return
+        }
+        
+        // Set up navigation
+        self.destination = destination
+        self.currentRoute = route
+        self.allRoutes = [route]
+        
+        // Initialize navigation properties
+        remainingDistance = route.distance
+        remainingTime = route.expectedTravelTime
+        
+        // Setup initial step
+        if let firstStep = route.steps.first {
+            currentStep = firstStep
+            nextStep = route.steps.count > 1 ? route.steps[1] : nil
+            currentStepRemainingDistance = firstStep.distance
+        }
+        
+        // Start active navigation
+        routeIsActive = true
+        currentStepIndex = 0
+        
+        // Announce start of navigation
+        if let destinationName = destination.name {
+            announceDirections("Starting navigation to \(destinationName)")
+        } else {
+            announceDirections("Starting navigation")
+        }
+        
+        print("Navigation started via notification system")
     }
     
     // MARK: - Public Methods
