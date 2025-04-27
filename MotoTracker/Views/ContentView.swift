@@ -1,11 +1,25 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var locationManager = LocationManager()
+    // Re-enable SupabaseManager
+    @EnvironmentObject private var supabaseManager: SupabaseManager
+    @EnvironmentObject private var locationManager: LocationManager
+    @EnvironmentObject private var rideManager: RideManager
     @State private var isRecording = false
     @State private var selectedTab = 0
     
     var body: some View {
+        // Re-enable authentication flow
+        Group {
+            if supabaseManager.currentUser == nil {
+                SignInView()
+            } else {
+                mainTabView
+            }
+        }
+    }
+    
+    private var mainTabView: some View {
         TabView(selection: $selectedTab) {
             // Map Tab
             VStack {
@@ -33,12 +47,19 @@ struct ContentView: View {
                 }
                 .tag(2)
             
+            // Profile & Settings Tab
+            ProfileView()
+                .tabItem {
+                    Label("Profile", systemImage: "person")
+                }
+                .tag(3)
+            
             // Settings Tab
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gear")
                 }
-                .tag(3)
+                .tag(4)
         }
         .onAppear {
             locationManager.requestLocationPermissions()
@@ -49,5 +70,9 @@ struct ContentView: View {
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
+            .environmentObject(LocationManager())
+            .environmentObject(RideManager())
+            .environmentObject(UserSettings())
+            .environmentObject(SupabaseManager.shared)
     }
 } 

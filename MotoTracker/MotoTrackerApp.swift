@@ -94,9 +94,12 @@ struct MotoTrackerApp: App {
     @StateObject private var locationManager = LocationManager()
     @StateObject private var rideManager = RideManager()
     @StateObject private var userSettings = UserSettings()
+    // Temporarily comment out until we solve import issues
+    // @StateObject private var supabaseManager = SupabaseManager.shared
     
     var body: some Scene {
         WindowGroup {
+            // Use ContentView directly
             ContentView()
                 .environmentObject(locationManager)
                 .environmentObject(rideManager)

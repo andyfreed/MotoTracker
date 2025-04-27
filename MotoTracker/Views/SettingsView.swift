@@ -8,24 +8,40 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Units")) {
-                    Picker("Measurement System", selection: $userSettings.unitSystem) {
-                        ForEach(UserSettings.UnitSystem.allCases) { system in
-                            Text(system.rawValue.capitalized)
-                                .tag(system)
+                Section(header: Text("Measurement System")) {
+                    Picker("Units", selection: $userSettings.unitSystem) {
+                        Text("Metric (km, km/h)").tag(UserSettings.UnitSystem.metric)
+                        Text("Imperial (mi, mph)").tag(UserSettings.UnitSystem.imperial)
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Current Units:")
+                            .font(.headline)
+                            .padding(.top, 8)
+                        
+                        HStack {
+                            Text("Distance:")
+                            Spacer()
+                            Text(userSettings.unitSystem.distanceUnit)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        HStack {
+                            Text("Speed:")
+                            Spacer()
+                            Text(userSettings.unitSystem.speedUnit)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        HStack {
+                            Text("Altitude:")
+                            Spacer()
+                            Text(userSettings.unitSystem.altitudeUnit)
+                                .foregroundColor(.secondary)
                         }
                     }
-                    .onChange(of: userSettings.unitSystem) { newValue in
-                        userSettings.setUnitSystem(newValue)
-                    }
-                    
-                    VStack(alignment: .leading) {
-                        Text("Distance: \(userSettings.unitSystem.distanceUnit)")
-                        Text("Speed: \(userSettings.unitSystem.speedUnit)")
-                        Text("Altitude: \(userSettings.unitSystem.altitudeUnit)")
-                    }
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .padding(.vertical, 4)
                 }
                 
                 Section(header: Text("Location")) {
@@ -69,15 +85,43 @@ struct SettingsView: View {
                     }
                 }
                 
+                Section(header: Text("App Settings")) {
+                    NavigationLink(destination: Text("Notifications settings would go here")) {
+                        Label("Notifications", systemImage: "bell")
+                    }
+                    
+                    NavigationLink(destination: Text("Privacy settings would go here")) {
+                        Label("Privacy", systemImage: "hand.raised")
+                    }
+                    
+                    NavigationLink(destination: Text("Support information would go here")) {
+                        Label("Help & Support", systemImage: "questionmark.circle")
+                    }
+                }
+                
                 Section(header: Text("About")) {
                     HStack {
                         Text("Version")
                         Spacer()
-                        Text("1.0")
+                        Text("1.0.0")
                             .foregroundColor(.secondary)
                     }
                     
-                    Link("Privacy Policy", destination: URL(string: "https://example.com/privacy")!)
+                    Button(action: {
+                        // Open app store review
+                        if let url = URL(string: "https://apps.apple.com") {
+                            UIApplication.shared.open(url)
+                        }
+                    }) {
+                        Label("Rate the App", systemImage: "star")
+                    }
+                    
+                    Button(action: {
+                        // Share the app
+                        // This would normally use UIActivityViewController
+                    }) {
+                        Label("Share the App", systemImage: "square.and.arrow.up")
+                    }
                 }
             }
             .navigationTitle("Settings")
@@ -157,7 +201,9 @@ struct MapSettingsView: View {
 
 struct SettingsView_Previews: PreviewProvider {
     static var previews: some View {
-        SettingsView()
-            .environmentObject(LocationManager())
+        NavigationView {
+            SettingsView()
+                .environmentObject(LocationManager())
+        }
     }
 } 

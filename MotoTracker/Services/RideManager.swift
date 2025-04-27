@@ -1,5 +1,9 @@
 import Foundation
 import Combine
+import SwiftUI
+
+// Note: We don't directly import SupabaseManager or SupabaseIntegration
+// Instead, we use notifications for communication between components
 
 class RideManager: ObservableObject {
     @Published var rides: [Ride] = []
@@ -32,6 +36,15 @@ class RideManager: ObservableObject {
         ride.endTime = Date()
         rides.append(ride)
         saveRides()
+        
+        // Re-enable Supabase integration with a different approach
+        // Since we can't directly import SupabaseManager, we'll rely on notification
+        // posting to handle this asynchronously
+        NotificationCenter.default.post(
+            name: Notification.Name("SaveRideToSupabase"),
+            object: nil,
+            userInfo: ["ride": ride]
+        )
         
         activeRide = nil
         isRecording = false
